@@ -1,0 +1,179 @@
+###WW5 INSTALL SCRIPT
+
+function Install-postgres () {
+
+###Postgres Test if Installed If Not Install
+$scriptLocation= "C:\InstallFiles\"
+If (test-path REGISTRY::HKLM\SOFTWARE\PostgreSQL\Installations\postgresql-x64-9.3) {write-host -ForegroundColor Yellow "Postgres Already Installed"}
+Else {start-process -FilePath "$scriptLocation\postgresql-9.3.5-1-windows-x64" -ArgumentList '--unattendedmodeui none --mode unattended --enable_acledit 1 --prefix "c:\Program Files (x86)\Vocal Recorders\WordWatch\PostreSQL\9.3" --datadir "c:\ProgramData\Vocal Recorders\WordWatch\Postgres" --superpassword postgres --serverport 5432 --servicename Postgres' -wait
+write-host -ForegroundColor white "Postgres is being installed Waiting 10 Seconds"
+start-sleep -s 10
+If (Get-itemproperty REGISTRY::HKLM\SOFTWARE\PostgreSQL\Installations\postgresql-x64-9.3)
+{write-host -ForegroundColor Green "Installed Postgres 9.3"}}
+if (!(test-path REGISTRY::HKLM\SOFTWARE\PostgreSQL\Installations\postgresql-x64-9.3  )) { write-host  -ForegroundColor Red "Postgres Failed to Install" } 
+}
+
+
+function Uninstall-postgres () {
+$scriptLocation= "C:\InstallFiles\"
+If (!(test-path REGISTRY::HKLM\SOFTWARE\PostgreSQL\Installations\postgresql-x64-9.3)) {write-host -ForegroundColor Yellow "Postgres Not Installed"}
+Else {start-process -FilePath "C:\Program Files (x86)\Vocal Recorders\WordWatch\PostreSQL\9.3\uninstall-postgresql" -ArgumentList '--mode unattended ' -wait
+write-host -ForegroundColor white "Postgres has been uninstalled , Data Directory Remains"
+}
+}
+
+
+
+function Install-Erlang () {
+$ErrorActionPreference = "SilentlyContinue"
+###Erlang Test if already INstall if Not Install
+### Enviroment Varibles
+[Environment]::SetEnvironmentVariable("Path", $env:Path + ";C:\Program Files (x86)\RabbitMQ Server\rabbitmq_server-3.3.1\sbin", [EnvironmentVariableTarget]::Machine)
+
+[Environment]::SetEnvironmentVariable("ERLANG_HOME","C:\Program Files\ERL6.1","MACHINE")
+set RABBITMQ_BASE=c:\RabbitMQ
+if (!(test-path C:\RabbitMQ)) {new-item -Path C:\RabbitMQ -ItemType Directory -force } 
+write-host -ForegroundColor Green "Enviroment Variables Installed"
+
+#### Erlang Install
+$ErlangPath = "C:\Program Files\ERL6.1\bin\erl.exe"
+$scriptLocation= "C:\InstallFiles\"
+##Check If Erlang Process is Running from a Uninstall
+if (!(Test-Path "C:\Program Files\ERL6.1\bin\erl.exe"  )) { write-host  -ForegroundColor Yellow "Erlang Process Not Found Running Clean up Uninstall" $(Get-Process -ProcessName *epmd* | Stop-Process -Force) $(start-sleep -second 3) $(Get-ChildItem -Path "C:\Program Files\ERL6.1\*" -Recurse | Remove-Item -Force -Recurse  )  } 
+if (!(Test-Path "C:\Program Files\ERL6.1\bin\erl.exe"  )) { write-host  -ForegroundColor Yellow "Erlang Process Not Found Running Clean up Uninstall" $(stop-service  RabbitMQ -Force) $(start-sleep -second 3) $(Get-Process -ProcessName *erlsrv* | Stop-Process -Force) $(Get-ChildItem -Path "C:\Program Files\ERL6.1\*" -Recurse | Remove-Item -Force -Recurse  )  } 
+if (Test-Path $ErlangPath  ) { write-host  -ForegroundColor Yellow "Erlang Already Installed" } 
+Else {start-process -FilePath "$scriptLocation\otp_win64_17.1.exe" -ArgumentList "/S /D=C:\Program Files\ERL6.1" -wait
+write-host -ForegroundColor White "Install for Elang Pause"
+Start-Sleep -Seconds 30
+If (test-path  -path $ErlangPath)
+{write-host -ForegroundColor Green "Installed Erlang 6.1 "}}
+if (!(test-path $ErlangPath )) { write-host  -ForegroundColor Red "Erlang Failed to Install" } 
+}
+
+function Uninstall-Erlang () {
+$ErlangPath = "C:\Program Files\ERL6.1\bin\erl.exe"
+If (!(test-path  -path $ErlangPath)) { Write-Host -ForegroundColor Yellow "Erlang Not Install"}
+Else {Write-Host -ForegroundColor Yellow "Erlang Uninstalled" $(start-process -FilePath "C:\Program Files\ERL6.1\Uninstall.exe" -ArgumentList "/S ") }
+}
+
+
+function Install-RabbitMQ () {
+###Pre Rabbit Check
+$loggedinuser = [Environment]::UserName
+if (Test-Path c:\users\administrator\.erlang.cookie )  { write-host  -ForegroundColor Red " Cookie in User Folder Found , Removing" $(Remove-item c:\users\administrator\.erlang.cookie -force) }
+if (Test-Path 'c:\windows\.erlang.cookie ') { write-host  -ForegroundColor Red " Cookie in Windows Directory Found , Removing" $(Remove-item C:\windows\.erlang.cookie -force)  }
+remove-item -path C:\Users\Administrator\AppData\Roaming\RabbitMQ  -Recurse -force
+remove-item -path C:\RabbitMQ  -Recurse -force
+
+####Rabbit MQ INstall
+$RabbitMQPath = "C:\Program Files (x86)\RabbitMQ Server\rabbitmq_server-3.3.1"
+$scriptLocation= "C:\InstallFiles\"
+if (Test-Path $RabbitMQPath  ) { write-host  -ForegroundColor Yellow "RabbitMQ Already Installed" } 
+Else {start-process -FilePath "$scriptLocation\rabbitmq-server-3.3.1.exe" -ArgumentList "/S"
+write-host -ForegroundColor White "Installing RabbitMQ"
+Start-Sleep -Seconds 15
+If (test-path  -path "$RabbitMQPath ")
+{write-host -ForegroundColor Green "Installed RabbitMQ 3.3.1 "}}
+if (!(test-path $RabbitMQPath)) { write-host  -ForegroundColor Red "Rabbit MQ Failed Failed to Install" }
+
+
+## Rabbit Config
+$loggedinuser = [Environment]::UserName
+write-host -ForegroundColor White "Erlang and Rabbit Installed, Moving RabbitMQ Cookie"
+#move-item -path C:\Windows\.erlang.cookie  -destination C:\users\administrator\ -force
+### Refreshing Enviroment Varibles 
+write-host -ForegroundColor Green "Session Enviroment updating"
+foreach($level in "Machine","User") {
+   [Environment]::GetEnvironmentVariables($level).GetEnumerator() | % {
+      # For Path variables, append the new values, if they're not already in there
+      if($_.Name -match 'Path$') { 
+         $_.Value = ($((Get-Content "Env:$($_.Name)") + ";$($_.Value)") -split ';' | Select -unique) -join ';'
+      }
+      $_
+   } | Set-Content -Path { "Env:$($_.Name)" }
+}
+
+write-host -ForegroundColor Green "Session Enviroment Updated , Running Rabbit Config"
+#move-item -path C:\Windows\.erlang.cookie  -destination C:\users\administrator\ -force
+rabbitmq-plugins enable rabbitmq_management
+restart-service  rabbitmq 
+move-item -path C:\Windows\.erlang.cookie  -destination C:\users\administrator\ -force
+
+$secpasswd = ConvertTo-SecureString 'guest' -AsPlainText -Force
+$credGuest = New-Object System.Management.Automation.PSCredential ('guest', $secpasswd)
+Start-sleep -Seconds 5
+Write-Host 'Using Rabbit Command line'
+rabbitmqctl add_user admin Wordwatch1
+rabbitmqctl set_permissions -p / admin “.*” “.*” “.*"
+
+'Retrieiving perms for new user to confirm...'
+Invoke-RestMethod 'http://localhost:15672/api/permissions/%2f/admin'  -Method get  -credential $credGuest
+
+}
+
+function Uninstall-RabbitMQ () {
+$RabbitMQPath = "C:\Program Files (x86)\RabbitMQ Server\rabbitmq_server-3.3.1"
+If (!(test-path  -path $RabbitMQPath)) { Write-Host -ForegroundColor Yellow "RabbitMQ Not Install"}
+Else {Write-Host -ForegroundColor Yellow "RabbitMQ Uninstalled" $(start-process -FilePath "C:\Program Files (x86)\RabbitMQ Server\uninstall.exe" -ArgumentList "/S") }
+}
+
+function Install-Grazer () {
+$GrazerPath = "C:\Program Files (x86)\Vocal Recorders\WordWatch\Grazer\RbrGrazer.exe"
+$scriptLocation= "C:\InstallFiles\"
+if (Test-Path $GrazerPath  ) { write-host  -ForegroundColor Yellow "Grazer Already Installed" } 
+Else {start-process -FilePath "$scriptLocation\Wordwatch.RbrGrazer.Installer.msi"  -ArgumentList "/q /norestart" -wait
+$WordwatchGrazer = (get-item "C:\Program Files (x86)\Vocal Recorders\WordWatch\Grazer\RbrGrazer.exe").VersionInfo | select ProductVersion 
+If (test-path  -path "C:\Program Files (x86)\Vocal Recorders\WordWatch\Grazer\RbrGrazer.exe")
+{write-host -ForegroundColor Green "Installed Grazer Version $WordwatchGrazer"}}
+if (!(test-path $GrazerPath )) { write-host  -ForegroundColor Red "Grazer Failed to Install" }
+}
+
+
+function Uninstall-Grazer () {
+$GrazerPath = "C:\Program Files (x86)\Vocal Recorders\WordWatch\Grazer\RbrGrazer.exe"
+If (!(test-path $GrazerPath )) {write-host -ForegroundColor Yellow "Grazer Not Installed"}
+Else {start-process MsiExec.exe -ArgumentList "/quiet /x {D856CD97-4E8A-4E94-AB7D-174350C12934}"}
+
+}
+
+function Install-Ingester () {
+$IngesterPath = "C:\Program Files (x86)\Vocal Recorders\WordWatch\Ingester\Wordwatch.Ingester.exe"
+$scriptLocation= "C:\InstallFiles\"
+if (Test-Path $IngesterPath  ) { write-host  -ForegroundColor Yellow "Ingester Server Already Installed" } 
+Else {start-process -FilePath "$scriptLocation\Wordwatch.Ingester.Installer.msi"  -ArgumentList "/q /norestart" -wait
+$WordwatchIngester = (get-item $IngesterPath).VersionInfo | select ProductVersion 
+If (test-path  -path $IngesterPath)
+{write-host -ForegroundColor Green "Installed Ingester Version $WordwatchIngester"}}
+if (!(test-path $IngesterPath )) { write-host  -ForegroundColor Red "Ingester Failed to Install" } 
+}
+
+
+function Uninstall-Ingester () {
+$IngesterPath = "C:\Program Files (x86)\Vocal Recorders\WordWatch\Ingester\Wordwatch.Ingester.exe"
+$IngesterUninstall = start-process MsiExec.exe -ArgumentList "/quiet /x {946AB50D-FBA2-4C94-8317-BB2ECD3869C2}"
+If (!(test-path $IngesterPath )) {write-host -ForegroundColor Yellow "Ingester Not Installed"}
+Else { write-host -ForegroundColor Yellow "Ingester Has Been Uninstalled" $IngesterUninstall}
+}
+
+
+
+function Install-Server () {
+$scriptLocation= "C:\InstallFiles\"
+$SeverPath ="C:\Program Files (x86)\Vocal Recorders\WordWatch\Server\Wordwatch.server.exe"
+if (Test-Path $SeverPath   ) { write-host  -ForegroundColor Yellow "WordWatch Server Already Installed" } 
+Else {start-process -FilePath "$scriptLocation\WordWatch.server.msi"  -ArgumentList "/q /norestart"   -Wait
+$Wordwatchserver = Get-WmiObject -Class Win32_Product |  select Name , Version |  where { $_.Name -like "WordWatch"}
+If (Get-WmiObject -Class Win32_Product | sort-object Name | select Name  | where { $_.Name -like "WordWatch*"})
+{write-host -ForegroundColor Green "Installed WordWatch Server Version $WordwatchServer "} }
+if (!(test-Path $SeverPath   )) { write-host  -ForegroundColor Red "WordWatch Server Failed to install" } 
+}
+
+
+function Uninstall-Server () {
+$SeverPath = "C:\Program Files (x86)\Vocal Recorders\WordWatch\Server\Wordwatch.server.exe"
+If (!(test-path $SeverPath )) {write-host -ForegroundColor Yellow "Wordwatch Server Not Installed"}
+start-process MsiExec.exe -ArgumentList "/quiet /x {5EFF7A60-6DB3-4452-8EDD-5BA35442BFBD}"
+
+}
+
+
